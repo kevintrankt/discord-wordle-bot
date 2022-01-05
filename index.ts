@@ -1,4 +1,4 @@
-import DiscordJS, { Intents, MessageEmbed } from 'discord.js'
+import DiscordJS, { Intents, MessageEmbed, TextChannel } from 'discord.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
@@ -10,10 +10,75 @@ const client = new DiscordJS.Client({
 })
 
 let scoreboard: any = {};
+let config: any = {};
+let channelid = '927814910837162026';
+
 
 client.on('ready', () => {
+    loadConfig();
     loadScoreBoard();
+
+    // midnight post temp
+    const schedule = require('node-schedule');
+    const rule = new schedule.RecurrenceRule();
+    rule.hour = 0;
+    rule.minute = 0;
+    rule.tz = 'America/Los_Angeles';
+
+
+    const job = schedule.scheduleJob(rule, function () {
+
+        const exampleEmbed = new MessageEmbed()
+            .setColor('#0099ff')
+            .setTitle(':green_square: :green_square: :green_square: NEW WORDLE CHALLENGE :green_square: :green_square: :green_square:')
+            .setURL('https://www.powerlanguage.co.uk/wordle/')
+            .setDescription('https://www.powerlanguage.co.uk/wordle/')
+            .addFields(
+                { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
+                { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
+            );
+
+        (client.channels.cache.get(channelid) as TextChannel).send({ content: generateScoreBoardEmbed()[0].replace(/\n/g, ' ') });
+        (client.channels.cache.get(channelid) as TextChannel).send({ embeds: [exampleEmbed] });
+
+    });
+
 })
+
+const loadConfig = () => {
+    const fs = require('fs');
+    const path = 'config.json';
+
+    if (fs.existsSync(path)) {
+        //file exists
+        fs.readFile(path, (err: any, data: any) => {
+            console.log('Config found - loading into memory');
+            if (err) {
+                throw err;
+            }
+            config = JSON.parse(data.toString());
+            console.log(config);
+            if (config.channelid) {
+                client.channels.fetch(config.channelid);
+            }
+        });
+    } else {
+        console.log('No config found - creating blank config');
+        writeConfig();
+    }
+}
+
+const writeConfig = () => {
+    const fs = require('fs');
+    const path = 'config.json';
+
+    fs.writeFile(path, JSON.stringify(config), (err: any) => {
+        if (err) {
+            throw err;
+        }
+        console.log('Config written to file')
+    })
+}
 
 const loadScoreBoard = () => {
     const fs = require('fs');
@@ -105,6 +170,20 @@ const generateScoreBoardEmbed = () => {
     return [userListEmbed, scoreListEmbed]
 }
 
+const setChannel = (channelid: any) => {
+    config.channelid = channelid;
+
+    writeConfig();
+}
+
+const setSchedule = () => {
+
+}
+
+const removeSchedule = () => {
+
+}
+
 client.on('messageCreate', (message) => {
 
     // Check if admin
@@ -119,7 +198,6 @@ client.on('messageCreate', (message) => {
         console.log(message.author);
         // Check if X/6
         let wordleScore;
-
         if (wordleMessage[1] == 'X') {
             wordleScore = 0;
         } else {
@@ -137,7 +215,7 @@ client.on('messageCreate', (message) => {
 
     // leaderboard command
     if (message.content === '!w scores') {
-        const exampleEmbed = new MessageEmbed()
+        const leaderboardEmbed = new MessageEmbed()
             .setColor('#0099ff')
             .setTitle(':green_square: :green_square: :green_square: LEADERBOARD :green_square: :green_square: :green_square:')
             .setURL('https://www.powerlanguage.co.uk/wordle/')
@@ -145,7 +223,7 @@ client.on('messageCreate', (message) => {
                 { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
                 { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
             )
-        message.channel.send({ embeds: [exampleEmbed] })
+        message.channel.send({ embeds: [leaderboardEmbed] })
     }
 
 
@@ -158,16 +236,18 @@ client.on('messageCreate', (message) => {
                 .setColor('#0099ff')
                 .setTitle(':green_square: :green_square: :green_square: NEW WORDLE CHALLENGE :green_square: :green_square: :green_square:')
                 .setURL('https://www.powerlanguage.co.uk/wordle/')
+                .setDescription('https://www.powerlanguage.co.uk/wordle/')
                 .addFields(
                     { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
                     { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
                 )
-            message.channel.send({ embeds: [exampleEmbed] })
+            // message.channel.send({ content: generateScoreBoardEmbed()[0].replace(/\n/g, ' ') });
+            message.channel.send({ embeds: [exampleEmbed] });
         }
 
         // manual update score
         if (message.content.includes('!w x')) {
-            const updateRegex = /!(\d+)>([+-]\d)/
+            const updateRegex = /!(\d+)> *([+-]\d)/
             const updateParse = message.content.match(updateRegex);
 
             if (updateParse) {
@@ -180,13 +260,24 @@ client.on('messageCreate', (message) => {
                 message.reply({
                     content: `${score} points for ${client.users.cache.get(userid)} (${updatedScore} total points)`
                 })
-
             }
-
         }
 
-    }
+        // configure wordle channel
+        if (message.content.includes('!w channel')) {
+            console.log(message.content);
+            const channelRegex = /#(\d+)/;
+            const channelParse = message.content.match(channelRegex);
 
+            if (channelParse) {
+                const channelid = channelParse[1];
+                setChannel(channelid);
+                message.reply({
+                    content: `[Config] Wordle channel set to ${client.channels.cache.get(channelid)}`
+                })
+            }
+        }
+    }
 
 })
 
