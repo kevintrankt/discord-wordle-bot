@@ -1,5 +1,7 @@
+import { channel } from 'diagnostics_channel';
 import DiscordJS, { Intents, MessageEmbed, TextChannel } from 'discord.js'
 import dotenv from 'dotenv'
+import { parse } from 'path/posix';
 dotenv.config()
 
 const client = new DiscordJS.Client({
@@ -11,41 +13,14 @@ const client = new DiscordJS.Client({
 
 let scoreboard: any = {};
 let config: any = {};
-let channelid = '927814910837162026';
 
 
 client.on('ready', () => {
-    loadConfig();
-    loadScoreBoard();
-
-    // midnight post temp
-    const schedule = require('node-schedule');
-    const rule = new schedule.RecurrenceRule();
-    rule.hour = 0;
-    rule.minute = 0;
-    rule.tz = 'America/Los_Angeles';
-
-
-    const job = schedule.scheduleJob(rule, function () {
-
-        const exampleEmbed = new MessageEmbed()
-            .setColor('#0099ff')
-            .setTitle(':green_square: :green_square: :green_square: NEW WORDLE CHALLENGE :green_square: :green_square: :green_square:')
-            .setURL('https://www.powerlanguage.co.uk/wordle/')
-            .setDescription('https://www.powerlanguage.co.uk/wordle/')
-            .addFields(
-                { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
-                { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
-            );
-
-        (client.channels.cache.get(channelid) as TextChannel).send({ content: generateScoreBoardEmbed()[0].replace(/\n/g, ' ') });
-        (client.channels.cache.get(channelid) as TextChannel).send({ embeds: [exampleEmbed] });
-
-    });
-
+    loadConfigFromFile();
+    loadScoreBoardFromFile();
 })
 
-const loadConfig = () => {
+const loadConfigFromFile = () => {
     const fs = require('fs');
     const path = 'config.json';
 
@@ -58,17 +33,26 @@ const loadConfig = () => {
             }
             config = JSON.parse(data.toString());
             console.log(config);
+
+            // if no timezone, set default to LA
+            if (!config.timezone) {
+                config.timezone = 'America/Los_Angeles'
+                writeConfigToFile();
+            }
+
+            // if a channel id is present in config, start scheduler for midnight notification in channel
             if (config.channelid) {
                 client.channels.fetch(config.channelid);
+                setNotificationSchedule();
             }
         });
     } else {
         console.log('No config found - creating blank config');
-        writeConfig();
+        writeConfigToFile();
     }
 }
 
-const writeConfig = () => {
+const writeConfigToFile = () => {
     const fs = require('fs');
     const path = 'config.json';
 
@@ -80,7 +64,7 @@ const writeConfig = () => {
     })
 }
 
-const loadScoreBoard = () => {
+const loadScoreBoardFromFile = () => {
     const fs = require('fs');
     const path = 'score.json';
 
@@ -100,11 +84,11 @@ const loadScoreBoard = () => {
         });
     } else {
         console.log('No scoreboard found - creating blank scoreboard');
-        writeScoreBoard();
+        writeScoreBoardToFile();
     }
 }
 
-const writeScoreBoard = () => {
+const writeScoreBoardToFile = () => {
     const fs = require('fs');
     const path = 'score.json';
 
@@ -116,42 +100,76 @@ const writeScoreBoard = () => {
     })
 }
 
-const updateScoreBoard = (userid: any, points: number) => {
+const updateScoreBoardScore = (userid: any, points: number, increment: boolean) => {
 
     // create a new scoreboard entry
     if (!scoreboard[userid]) {
-        scoreboard[userid] = points;
+        scoreboard[userid] = []
+
+        scoreboard[userid][0] = points;
+        if (increment)
+            scoreboard[userid][1] = 1;
     } else {
-        scoreboard[userid] += points;
+        scoreboard[userid][0] += points;
+        if (increment)
+            scoreboard[userid][1]++;
     }
 
-    writeScoreBoard();
+    writeScoreBoardToFile();
 
     return scoreboard[userid];
 }
 
-const generateScoreBoardMessage = () => {
-    // sort results
-    let scoreArray = []
-    for (const key in scoreboard) {
-        scoreArray.push([key, scoreboard[key]]);
-    }
-    scoreArray = scoreArray.sort(sort2d);
-
-    // generate reply
-    let scoreReply = '';
-    for (const entry of scoreArray) {
-        scoreReply += `${client.users.cache.get(entry[0])}: ${entry[1]}\n`
-    }
-
-    return scoreReply;
+const setScoreBoardAttempts = (userid: any, attempts: number) => {
+    scoreboard[userid][1] = attempts;
+    writeScoreBoardToFile();
+    return scoreboard[userid];
 }
 
-const generateScoreBoardEmbed = () => {
+const setNotificationChannel = (channelid: any) => {
+    if (channelid) {
+        config.channelid = channelid;
+    } else {
+        delete config.channelid;
+    }
+    writeConfigToFile();
+}
+
+const setNotificationTimezone = (timezone: any) => {
+    if (timezone) {
+        config.timezone = timezone;
+    } else {
+        config.timezone = 'America/Los_Angeles';
+    }
+    writeConfigToFile();
+}
+
+const setNotificationSchedule = () => {
+    // midnight post temp
+    const schedule = require('node-schedule');
+    const rule = new schedule.RecurrenceRule();
+    rule.hour = 0;
+    rule.minute = 0;
+    rule.tz = config.timezone;
+
+
+    const job = schedule.scheduleJob(rule, function () {
+
+        if (config.channelid) {
+            const dailyEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
+            (client.channels.cache.get(config.channelid) as TextChannel).send({ content: getListOfPlayers().replace(/\n/g, ' ') });
+            (client.channels.cache.get(config.channelid) as TextChannel).send({ embeds: [dailyEmbed] });
+        }
+    });
+
+    console.log(`Bot schedule to send message at ${rule.hour}:${rule.minute} ${rule.tz}`);
+}
+
+const getListOfPlayers = () => {
     // sort results
     let scoreArray = []
     for (const key in scoreboard) {
-        scoreArray.push([key, scoreboard[key]]);
+        scoreArray.push([key, scoreboard[key][0]]);
     }
     scoreArray = scoreArray.sort(sort2d);
 
@@ -160,27 +178,46 @@ const generateScoreBoardEmbed = () => {
     for (const entry of scoreArray) {
         userListEmbed += `${client.users.cache.get(entry[0])}\n`
     }
+    return userListEmbed;
+}
 
-    // generate list of scores
+const generateScoreBoardEmbed = (title: string) => {
+
+    // sort results
+    let scoreArray = []
+    for (const key in scoreboard) {
+        scoreArray.push([key, scoreboard[key][0]]);
+    }
+    scoreArray = scoreArray.sort(sort2d);
+
+    // generate list of users
+    let userListEmbed = '';
     let scoreListEmbed = '';
+    let averageListEmbed = '';
+    let attemptsListEmbed = '';
     for (const entry of scoreArray) {
-        scoreListEmbed += `${entry[1]}\n`
+        userListEmbed += `${client.users.cache.get(entry[0])}\n`;
+        scoreListEmbed += `${entry[1]}\n`;
+        attemptsListEmbed += `${scoreboard[entry[0]][1]}\n`;
+        averageListEmbed += `${parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])}\n`;
     }
 
-    return [userListEmbed, scoreListEmbed]
+
+    const embed = new MessageEmbed()
+        .setColor('#0099ff')
+        .setTitle(`:green_square: :green_square: :green_square: ${title} :green_square: :green_square: :green_square:`)
+        .setURL('https://www.powerlanguage.co.uk/wordle/')
+        .setDescription('https://www.powerlanguage.co.uk/wordle/')
+        .addFields(
+            { name: 'User', value: userListEmbed, inline: true },
+            { name: 'Score', value: scoreListEmbed, inline: true },
+            { name: 'Avg', value: averageListEmbed, inline: true }
+        );
+
+    return embed;
 }
 
-const setChannel = (channelid: any) => {
-    config.channelid = channelid;
-
-    writeConfig();
-}
-
-const setSchedule = () => {
-
-}
-
-const removeSchedule = () => {
+const setChampRoles = () => {
 
 }
 
@@ -204,26 +241,27 @@ client.on('messageCreate', (message) => {
             wordleScore = 7 - parseInt(wordleMessage[1]);
         }
 
-        const updatedScore = updateScoreBoard(message.author.id, wordleScore);
+        const updatedScore = updateScoreBoardScore(message.author.id, wordleScore, true);
 
         // reply with score
         message.reply({
-            content: `${wordleScore} points for ${message.author} (${updatedScore} total points)`
+            content: `${wordleScore} points for ${message.author} (${updatedScore[0]} total pts, ${updatedScore[1]} attempts)`
         })
 
     }
 
     // leaderboard command
     if (message.content === '!w scores') {
-        const leaderboardEmbed = new MessageEmbed()
-            .setColor('#0099ff')
-            .setTitle(':green_square: :green_square: :green_square: LEADERBOARD :green_square: :green_square: :green_square:')
-            .setURL('https://www.powerlanguage.co.uk/wordle/')
-            .addFields(
-                { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
-                { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
-            )
-        message.channel.send({ embeds: [leaderboardEmbed] })
+        const leaderboardEmbed = generateScoreBoardEmbed('LEADERBOARD');
+        message.channel.send({ embeds: [leaderboardEmbed] });
+    }
+
+    // fun LOTR stories
+    if (message.content === '!w story') {
+        const randomQuote = require('random-lotr-movie-quote');
+        // console.log(randomQuote());
+        message.channel.send({ content: `${randomQuote().char}: ${randomQuote().dialog}` });
+        message.delete();
     }
 
 
@@ -232,33 +270,45 @@ client.on('messageCreate', (message) => {
 
         // just debug stuff
         if (message.content === '!w debug') {
-            const exampleEmbed = new MessageEmbed()
-                .setColor('#0099ff')
-                .setTitle(':green_square: :green_square: :green_square: NEW WORDLE CHALLENGE :green_square: :green_square: :green_square:')
-                .setURL('https://www.powerlanguage.co.uk/wordle/')
-                .setDescription('https://www.powerlanguage.co.uk/wordle/')
-                .addFields(
-                    { name: 'User', value: generateScoreBoardEmbed()[0], inline: true },
-                    { name: 'Score', value: generateScoreBoardEmbed()[1], inline: true }
-                )
-            // message.channel.send({ content: generateScoreBoardEmbed()[0].replace(/\n/g, ' ') });
+
+            const exampleEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
+            message.channel.send({ content: getListOfPlayers().replace(/\n/g, ' ') });
             message.channel.send({ embeds: [exampleEmbed] });
         }
 
         // manual update score
         if (message.content.includes('!w x')) {
-            const updateRegex = /!(\d+)> *([+-]\d)/
+            const updateRegex = /!(\d+)> *([+-]\d+)/
             const updateParse = message.content.match(updateRegex);
 
             if (updateParse) {
                 console.log(updateParse);
                 const userid = updateParse[1];
                 const score = parseInt(updateParse[2]);
-                const updatedScore = updateScoreBoard(userid, score);
+                const updatedScore = updateScoreBoardScore(userid, score, false);
 
                 // reply with score
-                message.reply({
-                    content: `${score} points for ${client.users.cache.get(userid)} (${updatedScore} total points)`
+                message.channel.send({
+                    content: `[Admin] ${score} points for ${client.users.cache.get(userid)} (${updatedScore[0]} total pts, ${updatedScore[1]} attempts)`
+                })
+            }
+        }
+
+        // manual attempt set
+        if (message.content.includes('!w attempts')) {
+            console.log(message.content);
+            const updateRegex = /!(\d+)> *(\d+)/
+            const updateParse = message.content.match(updateRegex);
+
+            if (updateParse) {
+                console.log(updateParse);
+                const userid = updateParse[1];
+                const attempts = parseInt(updateParse[2]);
+                const updatedAttempts = setScoreBoardAttempts(userid, attempts);
+
+                // reply with score
+                message.channel.send({
+                    content: `[Admin] Set ${attempts} attempts for ${client.users.cache.get(userid)} (${updatedAttempts[0]} total pts, ${updatedAttempts[1]} attempts)`
                 })
             }
         }
@@ -271,12 +321,47 @@ client.on('messageCreate', (message) => {
 
             if (channelParse) {
                 const channelid = channelParse[1];
-                setChannel(channelid);
+                setNotificationChannel(channelid);
                 message.reply({
                     content: `[Config] Wordle channel set to ${client.channels.cache.get(channelid)}`
                 })
+            } else if (message.content.includes('remove')) {
+                setNotificationChannel(null);
+                message.reply({
+                    content: `[Config] Wordle channel removed`
+                })
             }
+
+            // todo print error if no channel provided
         }
+
+        // configure timezone
+        if (message.content.includes('!w tz')) {
+            console.log(message.content);
+            const tzRegex = /tz (.+)/;
+            const tzParse = message.content.match(tzRegex);
+
+            console.log(tzParse);
+
+            if (tzParse) {
+                const tz = tzParse[1];
+                if (tz == 'remove') {
+                    setNotificationTimezone(null);
+                    message.reply({
+                        content: `[Config] Wordle timezone reset to ${config.timezone}`
+                    })
+                } else {
+                    setNotificationTimezone(tz);
+                    message.reply({
+                        content: `[Config] Wordle timezone set to ${tz}`
+                    })
+                }
+            }
+
+            // todo print error if no valid tz provided
+        }
+
+        // TODO create command to designate a wordle champ role
     }
 
 })
