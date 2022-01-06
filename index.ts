@@ -2,6 +2,8 @@ import DiscordJS, { Intents, MessageEmbed, TextChannel } from 'discord.js'
 import dotenv from 'dotenv'
 dotenv.config()
 
+// i probably shouldn't keep everything in a single index.ts file lol. i'll fix this later
+
 const client = new DiscordJS.Client({
     intents: [
         Intents.FLAGS.GUILDS,
@@ -105,8 +107,7 @@ const updateScoreBoardScore = (userid: any, points: number, increment: boolean) 
         scoreboard[userid] = []
 
         scoreboard[userid][0] = points;
-        if (increment)
-            scoreboard[userid][1] = 1;
+        scoreboard[userid][1] = 1;
     } else {
         scoreboard[userid][0] += points;
         if (increment)
@@ -156,7 +157,7 @@ const setNotificationSchedule = () => {
         if (config.channelid) {
             const dailyEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
             (client.channels.cache.get(config.channelid) as TextChannel).send({ content: getListOfPlayers().replace(/\n/g, ' ') });
-            (client.channels.cache.get(config.channelid) as TextChannel).send({ embeds: [dailyEmbed] });
+            (client.channels.cache.get(config.channelid) as TextChannel).send({ embeds: [dailyEmbed.embed] });
         }
     });
 
@@ -188,7 +189,6 @@ const generateScoreBoardEmbed = (title: string) => {
     }
     scoreArray = scoreArray.sort(sort2d);
 
-    // generate list of users
     let userListEmbed = '';
     let scoreListEmbed = '';
     let averageListEmbed = '';
@@ -197,7 +197,10 @@ const generateScoreBoardEmbed = (title: string) => {
         userListEmbed += `${client.users.cache.get(entry[0])}\n`;
         scoreListEmbed += `${entry[1]}\n`;
         attemptsListEmbed += `${scoreboard[entry[0]][1]}\n`;
-        averageListEmbed += `${(parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])).toFixed(2)}\n`;
+        let avg = Math.abs((parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])) - 7).toFixed(1);
+        // averageListEmbed += `${(parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])).toFixed(2)}\n`;
+        averageListEmbed += `${avg.replace('.0', '')}/6\n`;
+
     }
 
 
@@ -212,7 +215,9 @@ const generateScoreBoardEmbed = (title: string) => {
             { name: 'Avg', value: averageListEmbed, inline: true }
         );
 
-    return embed;
+    return {
+        embed: embed
+    };
 }
 
 const setChampRoles = () => {
@@ -251,7 +256,7 @@ client.on('messageCreate', (message) => {
     // leaderboard command
     if (message.content === '!w scores') {
         const leaderboardEmbed = generateScoreBoardEmbed('LEADERBOARD');
-        message.channel.send({ embeds: [leaderboardEmbed] });
+        message.channel.send({ embeds: [leaderboardEmbed.embed] });
     }
 
     // fun LOTR stories
@@ -271,7 +276,7 @@ client.on('messageCreate', (message) => {
 
             const exampleEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
             // message.channel.send({ content: getListOfPlayers().replace(/\n/g, ' ') });
-            message.channel.send({ embeds: [exampleEmbed] });
+            message.channel.send({ embeds: [exampleEmbed.embed] });
         }
 
         // manual update score
