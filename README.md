@@ -6,7 +6,8 @@
 I built this bot just for my own server so it's not designed to keep track of multiple servers ¯\\_(ツ)_/¯
 ## README UNDER CONSTRUCTION
 
-![Discord Wordle Bot Screenshot](https://i.imgur.com/DD1Lmom.png)
+<img src="https://raw.githubusercontent.com/kevintrankt/discord-wordle-bot/main/screenshot.jpg" alt="Discord Wordle Bot Screenshot" width="600"/>
+
 
 ### Features
 
