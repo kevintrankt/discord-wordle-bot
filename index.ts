@@ -156,7 +156,7 @@ const setNotificationSchedule = () => {
 
         if (config.channelid) {
             const dailyEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
-            (client.channels.cache.get(config.channelid) as TextChannel).send({ content: getListOfPlayers().replace(/\n/g, ' ') });
+            (client.channels.cache.get(config.channelid) as TextChannel).send({ content: dailyEmbed.userListEmbed.replace(/\n/g, ' ') });
             (client.channels.cache.get(config.channelid) as TextChannel).send({ embeds: [dailyEmbed.embed] });
         }
     });
@@ -164,21 +164,7 @@ const setNotificationSchedule = () => {
     console.log(`Bot schedule to send message at ${rule.hour}:${rule.minute} ${rule.tz}`);
 }
 
-const getListOfPlayers = () => {
-    // sort results
-    let scoreArray = []
-    for (const key in scoreboard) {
-        scoreArray.push([key, scoreboard[key][0]]);
-    }
-    scoreArray = scoreArray.sort(sort2d);
 
-    // generate list of users
-    let userListEmbed = '';
-    for (const entry of scoreArray) {
-        userListEmbed += `${client.users.cache.get(entry[0])}\n`
-    }
-    return userListEmbed;
-}
 
 const generateScoreBoardEmbed = (title: string) => {
 
@@ -193,8 +179,33 @@ const generateScoreBoardEmbed = (title: string) => {
     let scoreListEmbed = '';
     let averageListEmbed = '';
     let attemptsListEmbed = '';
+    let allPlayersList = [];
+
+    let topPlayersList = [];
+    let topScoreCount = 0;
+    let topScore = -1;
+    let maxTopPlayers = 1;
     for (const entry of scoreArray) {
         userListEmbed += `${client.users.cache.get(entry[0])}\n`;
+
+        // get top 3 places
+        if (topScoreCount < maxTopPlayers) {
+            if (topScore == -1) {
+                topScore = entry[1];
+                topPlayersList.push(client.users.cache.get(entry[0]));
+            } else if (parseInt(entry[1]) == topScore) {
+                topPlayersList.push(client.users.cache.get(entry[0]));
+            }
+            else if (parseInt(entry[1]) != topScore) {
+                topScore = entry[1];
+                topScoreCount++;
+                if (topScoreCount < maxTopPlayers) {
+                    topPlayersList.push(client.users.cache.get(entry[0]));
+                }
+            }
+        }
+        allPlayersList.push(entry[0]);
+
         scoreListEmbed += `${entry[1]}\n`;
         attemptsListEmbed += `${scoreboard[entry[0]][1]}\n`;
         let avg = Math.abs((parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])) - 7).toFixed(1);
@@ -216,12 +227,26 @@ const generateScoreBoardEmbed = (title: string) => {
         );
 
     return {
-        embed: embed
+        embed: embed,
+        userListEmbed: userListEmbed,
+        topPlayersList: topPlayersList,
+        allPlayersList: allPlayersList
     };
 }
 
 const setChampRoles = () => {
+    // const scoreBoardEmbed = generateScoreBoardEmbed('');
+    // const topPlayersList = scoreBoardEmbed.topPlayersList;
+    // const allPlayersList = scoreBoardEmbed.allPlayersList;
 
+    // let role = client.guilds.cache.get()
+
+    // for (const player of allPlayersList) {
+    //     console.log(player);
+    //     client.guilds
+    // }
+
+    // console.log(topPlayersList);
 }
 
 client.on('messageCreate', (message) => {
@@ -275,8 +300,10 @@ client.on('messageCreate', (message) => {
         if (message.content === '!w debug') {
 
             const exampleEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
-            // message.channel.send({ content: getListOfPlayers().replace(/\n/g, ' ') });
+            message.channel.send({ content: exampleEmbed.userListEmbed.replace(/\n/g, ' ') });
             message.channel.send({ embeds: [exampleEmbed.embed] });
+
+            setChampRoles();
         }
 
         // manual update score
