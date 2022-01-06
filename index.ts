@@ -1,7 +1,5 @@
-import { channel } from 'diagnostics_channel';
 import DiscordJS, { Intents, MessageEmbed, TextChannel } from 'discord.js'
 import dotenv from 'dotenv'
-import { parse } from 'path/posix';
 dotenv.config()
 
 const client = new DiscordJS.Client({
