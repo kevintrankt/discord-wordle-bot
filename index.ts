@@ -197,7 +197,7 @@ const generateScoreBoardEmbed = (title: string) => {
         userListEmbed += `${client.users.cache.get(entry[0])}\n`;
         scoreListEmbed += `${entry[1]}\n`;
         attemptsListEmbed += `${scoreboard[entry[0]][1]}\n`;
-        averageListEmbed += `${parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])}\n`;
+        averageListEmbed += `${(parseFloat(entry[1]) / parseFloat(scoreboard[entry[0]][1])).toFixed(2)}\n`;
     }
 
 
@@ -270,7 +270,7 @@ client.on('messageCreate', (message) => {
         if (message.content === '!w debug') {
 
             const exampleEmbed = generateScoreBoardEmbed('NEW WORDLE CHALLENGE');
-            message.channel.send({ content: getListOfPlayers().replace(/\n/g, ' ') });
+            // message.channel.send({ content: getListOfPlayers().replace(/\n/g, ' ') });
             message.channel.send({ embeds: [exampleEmbed] });
         }
 
