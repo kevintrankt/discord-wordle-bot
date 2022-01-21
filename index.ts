@@ -255,7 +255,7 @@ client.on('messageCreate', (message) => {
     const isAdmin = message.member?.permissions.has("ADMINISTRATOR");
 
     // Check for Wordle Score
-    const wordleRegex = /Wordle \d{3} ([\dX])\/6\n{0,2}[⬛🟩🟨⬜]{5}/;
+    const wordleRegex = /Wordle \d{3} ([\dX])\/6\*?\n{0,2}[⬛🟩🟨⬜🟧🟦]{5}/;
     const wordleMessage = message.content.match(wordleRegex);
 
     if (wordleMessage) {
